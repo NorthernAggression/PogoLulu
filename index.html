@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#172219">
-<title>Pack Trail</title>
+<title>PogoLulu</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -136,6 +136,8 @@
     width:100%;height:220px;border-radius:6px;overflow:hidden;
     margin:14px 0;border:1.5px solid var(--parchment-dim);background:#dcd6c2;
   }
+  .map-box.large{height:320px;}
+  .map-box.thumb{height:200px;margin:10px 0 0;}
   .geo-status{font-size:12px;text-align:center;color:var(--ink-dim);margin:-6px 0 12px;}
   .geo-status.warn{color:var(--rust);}
   .route-preview{width:100%;height:64px;display:block;margin-top:8px;border-radius:4px;background:var(--parchment-dim);}
@@ -161,7 +163,7 @@
 </head>
 <body>
 <div class="app">
-  <div class="header"><h1>Pack Trail</h1><span class="paw">🐾</span></div>
+  <div class="header"><h1>PogoLulu</h1><span class="paw">🐾</span></div>
   <div class="subtitle">walk log for the whole crew</div>
 
   <div class="tabs">
@@ -322,6 +324,33 @@ function renderRoutePreview(route){
   </svg>`;
 }
 
+// Real tiled maps (with street names) for saved routes
+let savedRouteMap = null;
+let historyMaps = [];
+
+function initRouteMap(elId, route, opts={}){
+  const el = document.getElementById(elId);
+  if(!el || typeof L === 'undefined' || !route || route.length < 2) return null;
+  const interactive = opts.interactive !== false;
+  const map = L.map(elId, {
+    zoomControl: interactive,
+    dragging: interactive,
+    scrollWheelZoom: false,
+    doubleClickZoom: interactive,
+    touchZoom: interactive,
+    boxZoom: interactive,
+    keyboard: interactive,
+    attributionControl: false
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  const latlngs = route.map(p=>[p.lat,p.lng]);
+  const poly = L.polyline(latlngs, {color:'#c1502e', weight:4}).addTo(map);
+  map.fitBounds(poly.getBounds(), {padding:[24,24]});
+  L.circleMarker(latlngs[0], {radius:6, color:'#fff', weight:2, fillColor:'#3e7ca6', fillOpacity:1}).addTo(map);
+  L.circleMarker(latlngs[latlngs.length-1], {radius:6, color:'#fff', weight:2, fillColor:'#e8b23e', fillOpacity:1}).addTo(map);
+  return map;
+}
+
 async function loadState(){
   try{
     const d = localStorage.getItem('pack-trail-dogs');
@@ -355,6 +384,14 @@ function fmtTime(ms){
 function dogById(id){ return state.dogs.find(d=>d.id===id); }
 
 function switchTab(tab){
+  if(activeTab==='history' && tab!=='history' && historyMaps.length){
+    historyMaps.forEach(m=>m.remove());
+    historyMaps = [];
+  }
+  if(activeTab==='track' && tab!=='track' && savedRouteMap){
+    savedRouteMap.remove();
+    savedRouteMap = null;
+  }
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
   render();
@@ -454,7 +491,7 @@ function renderTrack(container){
     html += `
       <h3 style="margin-bottom:10px;color:var(--ink);">Walk complete</h3>
       <div class="timer-display" style="padding:4px 0 14px;">${fmtTime(elapsedMs)}</div>
-      ${lastSavedRoute.length>1 ? renderRoutePreview(lastSavedRoute) : ''}
+      ${lastSavedRoute.length>1 ? '<div class="map-box large" id="savedRouteMap"></div>' : ''}
       <div class="field" style="margin-top:14px;">
         <label>Distance (miles${gpsDist? ', from GPS — edit if needed':', optional'})</label>
         <input type="number" step="0.1" id="distInput" placeholder="e.g. 1.2" value="${draftDistance}">
@@ -499,6 +536,10 @@ function renderTrack(container){
 
   if(timerRunning && geoStatus!=='denied' && geoStatus!=='unavailable'){
     initLiveMap();
+  }
+  if(savedRouteMap){ savedRouteMap.remove(); savedRouteMap = null; }
+  if(justStopped && lastSavedRoute.length>1){
+    savedRouteMap = initRouteMap('savedRouteMap', lastSavedRoute, {interactive:true});
   }
 
   container.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{ if(!timerRunning) toggleDogSelect(c.dataset.id); }));
@@ -601,12 +642,21 @@ function renderHistory(container){
       </div>
       ${(w.pee || w.poop) ? `<div class="potty-badges">${w.pee ? `<span>💧 ${w.pee}</span>`:''}${w.poop ? `<span>💩 ${w.poop}</span>`:''}</div>` : ''}
       ${w.note ? `<div class="note">"${escapeHtml(w.note)}"</div>` : ''}
-      ${w.route ? renderRoutePreview(w.route) : ''}
+      ${w.route ? `<div class="map-box thumb" id="routeMap_${w.id}"></div>` : ''}
     </div>`;
   });
   html += `</div></div>`;
   container.innerHTML = html;
   container.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click', ()=>{ historyFilter=c.dataset.filter; render(); }));
+
+  historyMaps.forEach(m=>m.remove());
+  historyMaps = [];
+  walks.forEach(w=>{
+    if(w.route){
+      const m = initRouteMap('routeMap_'+w.id, w.route, {interactive:false});
+      if(m) historyMaps.push(m);
+    }
+  });
 }
 
 function escapeHtml(s){
