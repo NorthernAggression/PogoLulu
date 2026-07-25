@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#172219">
+<title>Pack Trail</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg:#172219;
+    --panel:#1f2e23;
+    --panel-2:#243528;
+    --parchment:#ece4cc;
+    --parchment-dim:#d9cfb0;
+    --ink:#211f14;
+    --ink-dim:#6a634c;
+    --blaze-yellow:#e8b23e;
+    --blaze-blue:#3e7ca6;
+    --rust:#c1502e;
+    --line:#8c8464;
+    --border:#33452f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--parchment);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  .app{max-width:640px;margin:0 auto;padding:24px 18px 60px;}
+  h1,h2,h3{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:0.03em;margin:0;}
+  .header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;}
+  .header h1{font-size:26px;color:var(--parchment);}
+  .header .paw{font-size:20px;}
+  .subtitle{color:var(--line);font-size:13px;margin-bottom:22px;letter-spacing:0.02em;}
+
+  .tabs{display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--border);}
+  .tab{
+    flex:1;text-align:center;padding:10px 4px;font-family:'Oswald',sans-serif;
+    font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--line);
+    cursor:pointer;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;
+  }
+  .tab.active{color:var(--blaze-yellow);border-bottom-color:var(--blaze-yellow);}
+
+  .card{
+    background:var(--parchment);color:var(--ink);
+    border-radius:3px;padding:18px;margin-bottom:14px;
+    box-shadow:0 1px 0 rgba(0,0,0,0.2);
+  }
+  .card.dark{background:var(--panel-2);color:var(--parchment);border:1px solid var(--border);}
+
+  /* Track tab */
+  .dog-picker{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;}
+  .chip{
+    padding:7px 13px;border-radius:20px;font-size:13px;font-weight:600;
+    border:2px solid transparent;cursor:pointer;user-select:none;
+    background:var(--parchment-dim);color:var(--ink);transition:transform .1s;
+  }
+  .chip.selected{border-color:var(--ink);transform:translateY(-1px);}
+  .timer-display{
+    font-family:'JetBrains Mono',monospace;font-size:54px;font-weight:700;
+    text-align:center;padding:22px 0 6px;letter-spacing:0.02em;
+  }
+  .timer-sub{text-align:center;color:var(--ink-dim);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;}
+  button{font-family:'Oswald',sans-serif;letter-spacing:0.04em;text-transform:uppercase;font-size:14px;
+    border:none;border-radius:3px;padding:13px 20px;cursor:pointer;width:100%;}
+  .btn-start{background:var(--blaze-blue);color:#fff;}
+  .btn-stop{background:var(--rust);color:#fff;}
+  .btn-primary{background:var(--ink);color:var(--parchment);}
+  .btn-ghost{background:transparent;border:1.5px solid var(--ink-dim);color:var(--ink);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-dim);margin-bottom:5px;}
+  .field input, .field textarea{
+    width:100%;padding:9px 10px;border:1.5px solid var(--parchment-dim);border-radius:3px;
+    font-family:'Inter',sans-serif;font-size:14px;background:#fff;color:var(--ink);
+  }
+  .field textarea{resize:vertical;min-height:50px;}
+
+  .swatch-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
+  .swatch.selected{border-color:var(--ink);}
+
+  /* Dogs tab */
+  .dog-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--parchment-dim);}
+  .dog-row:last-child{border-bottom:none;}
+  .dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;}
+  .dog-name{font-weight:600;font-size:15px;flex:1;}
+  .dog-meta{font-size:12px;color:var(--ink-dim);}
+  .remove-x{cursor:pointer;color:var(--ink-dim);font-size:16px;padding:2px 6px;}
+
+  /* History */
+  .trail-wrap{position:relative;padding-left:26px;}
+  .trail-line{position:absolute;left:9px;top:6px;bottom:6px;width:2px;
+    background-image:linear-gradient(var(--line) 60%, transparent 0%);
+    background-size:2px 10px;background-repeat:repeat-y;}
+  .walk-entry{position:relative;margin-bottom:14px;}
+  .walk-entry::before{
+    content:"🐾";font-size:12px;position:absolute;left:-26px;top:14px;
+  }
+  .walk-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .walk-date{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:0.05em;}
+  .walk-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .tag{font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;color:#fff;}
+  .walk-stats{display:flex;gap:18px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;}
+  .walk-stats span{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:10px;color:var(--ink-dim);text-transform:uppercase;}
+  .note{font-size:13px;color:var(--ink-dim);margin-top:6px;font-style:italic;}
+  .filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+
+  .empty{color:var(--line);font-size:14px;text-align:center;padding:40px 10px;}
+  .empty-title{font-family:'Oswald',sans-serif;font-size:18px;color:var(--parchment);margin-bottom:6px;text-transform:uppercase;}
+
+  /* Stats */
+  .stat-card{display:flex;align-items:center;gap:14px;}
+  .stat-nums{display:flex;gap:22px;margin-left:auto;text-align:right;}
+  .stat-num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px;}
+  .stat-label{font-size:10px;text-transform:uppercase;color:var(--ink-dim);letter-spacing:0.04em;}
+  .pack-total{display:flex;justify-content:space-around;text-align:center;padding:20px 10px;}
+  .pack-total .n{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--blaze-yellow);}
+  .pack-total .l{font-size:11px;color:var(--line);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;}
+
+  .row2{display:flex;gap:10px;}
+  .row2 > *{flex:1;}
+
+  /* Map */
+  .map-box{
+    width:100%;height:220px;border-radius:6px;overflow:hidden;
+    margin:14px 0;border:1.5px solid var(--parchment-dim);background:#dcd6c2;
+  }
+  .geo-status{font-size:12px;text-align:center;color:var(--ink-dim);margin:-6px 0 12px;}
+  .geo-status.warn{color:var(--rust);}
+  .route-preview{width:100%;height:64px;display:block;margin-top:8px;border-radius:4px;background:var(--parchment-dim);}
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{background:var(--parchment);color:var(--ink);}
+
+  /* Potty counters */
+  .counter-row{display:flex;gap:10px;margin:14px 0;}
+  .counter-box{
+    flex:1;display:flex;align-items:center;justify-content:space-between;
+    background:var(--parchment-dim);border-radius:6px;padding:10px 12px;
+  }
+  .counter-label{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;}
+  .counter-controls{display:flex;align-items:center;gap:10px;}
+  .counter-btn{
+    width:26px;height:26px;border-radius:50%;border:none;padding:0;
+    font-family:'Inter',sans-serif;font-size:16px;font-weight:700;line-height:1;
+    background:var(--ink);color:var(--parchment);cursor:pointer;
+  }
+  .counter-btn:disabled{opacity:0.3;cursor:not-allowed;}
+  .counter-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;min-width:16px;text-align:center;}
+  .potty-badges{display:flex;gap:10px;margin-top:6px;font-size:12px;color:var(--ink-dim);}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header"><h1>Pack Trail</h1><span class="paw">🐾</span></div>
+  <div class="subtitle">walk log for the whole crew</div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="track">Track</button>
+    <button class="tab" data-tab="dogs">Dogs</button>
+    <button class="tab" data-tab="history">History</button>
+    <button class="tab" data-tab="stats">Stats</button>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<script>
+const COLORS = ['#e8b23e','#3e7ca6','#c1502e','#6b8e4e','#8c5fa3','#4e8c82','#b06b3e','#4e6ab0'];
+
+let state = { dogs: [], walks: [] };
+let activeTab = 'track';
+let timerRunning = false;
+let timerStart = null;
+let timerInterval = null;
+let elapsedMs = 0;
+let walkStopped = false;
+let selectedDogIds = [];
+let historyFilter = 'all';
+let peeCount = 0;
+let poopCount = 0;
+let draftDistance = '';
+let draftNote = '';
+
+function adjustCount(which, delta){
+  if(which==='pee') peeCount = Math.max(0, peeCount+delta);
+  else poopCount = Math.max(0, poopCount+delta);
+  render();
+}
+
+function renderCounters(){
+  return `<div class="counter-row">
+    <div class="counter-box">
+      <span class="counter-label">💧 Pee</span>
+      <div class="counter-controls">
+        <button class="counter-btn" id="peeMinus" ${peeCount===0?'disabled':''}>−</button>
+        <span class="counter-val">${peeCount}</span>
+        <button class="counter-btn" id="peePlus">+</button>
+      </div>
+    </div>
+    <div class="counter-box">
+      <span class="counter-label">💩 Poop</span>
+      <div class="counter-controls">
+        <button class="counter-btn" id="poopMinus" ${poopCount===0?'disabled':''}>−</button>
+        <span class="counter-val">${poopCount}</span>
+        <button class="counter-btn" id="poopPlus">+</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function wireCounters(container){
+  const pm = container.querySelector('#peeMinus'), pp = container.querySelector('#peePlus');
+  const om = container.querySelector('#poopMinus'), op = container.querySelector('#poopPlus');
+  if(pm) pm.addEventListener('click', ()=>adjustCount('pee',-1));
+  if(pp) pp.addEventListener('click', ()=>adjustCount('pee',1));
+  if(om) om.addEventListener('click', ()=>adjustCount('poop',-1));
+  if(op) op.addEventListener('click', ()=>adjustCount('poop',1));
+}
+
+// GPS tracking state
+let geoWatchId = null;
+let currentRoute = [];       // [{lat,lng}] recorded during the active walk
+let lastSavedRoute = [];     // route attached to the walk just stopped, for the save screen
+let geoStatus = 'idle';      // idle | locating | tracking | denied | unavailable
+let liveMap = null, livePolyline = null, liveMarker = null;
+
+function haversine(a, b){
+  const R = 6371000; // meters
+  const toRad = d => d*Math.PI/180;
+  const dLat = toRad(b.lat-a.lat), dLng = toRad(b.lng-a.lng);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return R * 2*Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function routeDistanceMiles(route){
+  let meters = 0;
+  for(let i=1;i<route.length;i++) meters += haversine(route[i-1], route[i]);
+  return meters / 1609.34;
+}
+
+function startGeoTracking(){
+  if(!('geolocation' in navigator)){
+    geoStatus = 'unavailable';
+    render();
+    return;
+  }
+  geoStatus = 'locating';
+  currentRoute = [];
+  geoWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      currentRoute.push(pt);
+      geoStatus = 'tracking';
+      updateLiveMap(pt);
+      const statusEl = document.getElementById('geoStatusText');
+      if(statusEl) statusEl.textContent = `Tracking · ${routeDistanceMiles(currentRoute).toFixed(2)} mi so far`;
+    },
+    err => {
+      geoStatus = (err.code === 1) ? 'denied' : 'unavailable';
+      render();
+    },
+    { enableHighAccuracy:true, maximumAge:5000, timeout:15000 }
+  );
+}
+
+function stopGeoTracking(){
+  if(geoWatchId !== null){
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+  }
+  lastSavedRoute = [...currentRoute];
+  currentRoute = [];
+  if(liveMap){ liveMap.remove(); liveMap = null; livePolyline = null; liveMarker = null; }
+}
+
+function initLiveMap(){
+  const el = document.getElementById('liveMap');
+  if(!el || typeof L === 'undefined') return;
+  const center = currentRoute.length ? currentRoute[currentRoute.length-1] : {lat:0,lng:0};
+  liveMap = L.map('liveMap', {zoomControl:false, attributionControl:false}).setView([center.lat, center.lng], 17);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(liveMap);
+  livePolyline = L.polyline(currentRoute.map(p=>[p.lat,p.lng]), {color:'#c1502e', weight:4}).addTo(liveMap);
+  if(currentRoute.length){
+    liveMarker = L.circleMarker([center.lat,center.lng], {radius:7, color:'#fff', weight:2, fillColor:'#3e7ca6', fillOpacity:1}).addTo(liveMap);
+  }
+}
+
+function updateLiveMap(pt){
+  if(!liveMap){ initLiveMap(); return; }
+  livePolyline.addLatLng([pt.lat, pt.lng]);
+  if(liveMarker) liveMarker.setLatLng([pt.lat, pt.lng]);
+  liveMap.panTo([pt.lat, pt.lng]);
+}
+
+function renderRoutePreview(route){
+  if(!route || route.length < 2) return '';
+  const lats = route.map(p=>p.lat), lngs = route.map(p=>p.lng);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const w=280,h=64,pad=6;
+  const spanLat = (maxLat-minLat)||0.0001, spanLng=(maxLng-minLng)||0.0001;
+  const pts = route.map(p=>{
+    const x = pad + ((p.lng-minLng)/spanLng)*(w-pad*2);
+    const y = h-pad - ((p.lat-minLat)/spanLat)*(h-pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const first = pts.split(' ')[0].split(',');
+  const last = pts.split(' ').slice(-1)[0].split(',');
+  return `<svg class="route-preview" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+    <polyline points="${pts}" fill="none" stroke="#c1502e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${first[0]}" cy="${first[1]}" r="4" fill="#3e7ca6"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="#e8b23e"/>
+  </svg>`;
+}
+
+async function loadState(){
+  try{
+    const d = localStorage.getItem('pack-trail-dogs');
+    state.dogs = d ? JSON.parse(d) : [];
+  }catch(e){ state.dogs = []; }
+  try{
+    const w = localStorage.getItem('pack-trail-walks');
+    state.walks = w ? JSON.parse(w) : [];
+  }catch(e){ state.walks = []; }
+  render();
+}
+
+async function saveDogs(){
+  try{ localStorage.setItem('pack-trail-dogs', JSON.stringify(state.dogs)); }
+  catch(e){ console.error('save dogs failed', e); }
+}
+async function saveWalks(){
+  try{ localStorage.setItem('pack-trail-walks', JSON.stringify(state.walks)); }
+  catch(e){ console.error('save walks failed', e); }
+}
+
+function fmtTime(ms){
+  const totalSec = Math.floor(ms/1000);
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  const s = totalSec%60;
+  const pad = n => String(n).padStart(2,'0');
+  return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function dogById(id){ return state.dogs.find(d=>d.id===id); }
+
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
+  render();
+}
+
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>switchTab(t.dataset.tab)));
+
+function toggleDogSelect(id){
+  if(selectedDogIds.includes(id)) selectedDogIds = selectedDogIds.filter(x=>x!==id);
+  else selectedDogIds.push(id);
+  render();
+}
+
+function startTimer(){
+  if(selectedDogIds.length===0) return;
+  timerRunning = true;
+  walkStopped = false;
+  timerStart = Date.now() - elapsedMs;
+  timerInterval = setInterval(()=>{
+    elapsedMs = Date.now() - timerStart;
+    const disp = document.getElementById('timerDisplay');
+    if(disp) disp.textContent = fmtTime(elapsedMs);
+  }, 500);
+  startGeoTracking();
+  render();
+}
+
+function stopTimer(){
+  timerRunning = false;
+  clearInterval(timerInterval);
+  stopGeoTracking();
+  walkStopped = true;
+  render();
+}
+
+function discardWalk(){
+  elapsedMs = 0;
+  selectedDogIds = [];
+  lastSavedRoute = [];
+  geoStatus = 'idle';
+  walkStopped = false;
+  peeCount = 0;
+  poopCount = 0;
+  draftDistance = '';
+  draftNote = '';
+  render();
+}
+
+async function saveWalk(distance, note){
+  const walk = {
+    id: 'w_'+Date.now(),
+    dogIds: [...selectedDogIds],
+    durationMs: elapsedMs,
+    distance: distance ? parseFloat(distance) : (lastSavedRoute.length>1 ? parseFloat(routeDistanceMiles(lastSavedRoute).toFixed(2)) : null),
+    note: note || '',
+    date: new Date().toISOString(),
+    route: lastSavedRoute.length>1 ? lastSavedRoute : null,
+    pee: peeCount,
+    poop: poopCount
+  };
+  state.walks.unshift(walk);
+  await saveWalks();
+  elapsedMs = 0;
+  selectedDogIds = [];
+  lastSavedRoute = [];
+  geoStatus = 'idle';
+  walkStopped = false;
+  peeCount = 0;
+  poopCount = 0;
+  draftDistance = '';
+  draftNote = '';
+  switchTab('history');
+}
+
+async function addDog(name, color){
+  if(!name.trim()) return;
+  state.dogs.push({ id:'d_'+Date.now(), name:name.trim(), color });
+  await saveDogs();
+  render();
+}
+
+async function removeDog(id){
+  state.dogs = state.dogs.filter(d=>d.id!==id);
+  await saveDogs();
+  render();
+}
+
+function renderTrack(container){
+  const justStopped = walkStopped;
+  const noDogs = state.dogs.length===0;
+  let html = `<div class="card">`;
+  if(noDogs){
+    html += `<div class="empty"><div class="empty-title">No dogs yet</div>Add a dog on the Dogs tab before you start a walk.</div>`;
+  } else if(justStopped){
+    const gpsDist = lastSavedRoute.length>1 ? routeDistanceMiles(lastSavedRoute).toFixed(2) : '';
+    if(draftDistance === '' && gpsDist) draftDistance = gpsDist;
+    html += `
+      <h3 style="margin-bottom:10px;color:var(--ink);">Walk complete</h3>
+      <div class="timer-display" style="padding:4px 0 14px;">${fmtTime(elapsedMs)}</div>
+      ${lastSavedRoute.length>1 ? renderRoutePreview(lastSavedRoute) : ''}
+      <div class="field" style="margin-top:14px;">
+        <label>Distance (miles${gpsDist? ', from GPS — edit if needed':', optional'})</label>
+        <input type="number" step="0.1" id="distInput" placeholder="e.g. 1.2" value="${draftDistance}">
+      </div>
+      ${renderCounters()}
+      <div class="field">
+        <label>Note (optional)</label>
+        <textarea id="noteInput" placeholder="Sniffed every tree on Maple St.">${draftNote}</textarea>
+      </div>
+      <div class="row2">
+        <button class="btn-ghost" id="discardBtn">Discard</button>
+        <button class="btn-primary" id="saveWalkBtn">Save walk</button>
+      </div>`;
+  } else {
+    html += `<label style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-dim);">Who's on this walk?</label>
+      <div class="dog-picker">`;
+    state.dogs.forEach(d=>{
+      const sel = selectedDogIds.includes(d.id);
+      html += `<div class="chip ${sel?'selected':''}" style="background:${sel? d.color:'var(--parchment-dim)'};color:${sel?'#fff':'var(--ink)'}" data-id="${d.id}">${d.name}</div>`;
+    });
+    html += `</div>
+      <div class="timer-display" id="timerDisplay">${fmtTime(elapsedMs)}</div>
+      <div class="timer-sub">${timerRunning ? 'walk in progress' : (selectedDogIds.length? 'ready when you are' : 'pick at least one dog')}</div>`;
+    if(timerRunning){
+      html += `<div class="map-box" id="liveMap"></div>`;
+      if(geoStatus==='denied'){
+        html += `<div class="geo-status warn">Location access was denied — you can still enter distance manually when you stop.</div>`;
+      } else if(geoStatus==='unavailable'){
+        html += `<div class="geo-status warn">Location isn't available here — you can still enter distance manually when you stop.</div>`;
+      } else {
+        html += `<div class="geo-status" id="geoStatusText">${geoStatus==='locating' ? 'Finding your location…' : `Tracking · ${routeDistanceMiles(currentRoute).toFixed(2)} mi so far`}</div>`;
+      }
+    }
+    if(!timerRunning){
+      html += `<button class="btn-start" id="startBtn" ${selectedDogIds.length===0?'disabled':''}>Start walk</button>`;
+    } else {
+      html += `<button class="btn-stop" id="stopBtn">Stop walk</button>`;
+    }
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+
+  if(timerRunning && geoStatus!=='denied' && geoStatus!=='unavailable'){
+    initLiveMap();
+  }
+
+  container.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{ if(!timerRunning) toggleDogSelect(c.dataset.id); }));
+  const startBtn = container.querySelector('#startBtn');
+  if(startBtn) startBtn.addEventListener('click', startTimer);
+  const stopBtn = container.querySelector('#stopBtn');
+  if(stopBtn) stopBtn.addEventListener('click', stopTimer);
+  const discardBtn = container.querySelector('#discardBtn');
+  if(discardBtn) discardBtn.addEventListener('click', discardWalk);
+  const saveBtn = container.querySelector('#saveWalkBtn');
+  if(saveBtn) saveBtn.addEventListener('click', ()=>{
+    const dist = container.querySelector('#distInput').value;
+    const note = container.querySelector('#noteInput').value;
+    saveWalk(dist, note);
+  });
+  const distInput = container.querySelector('#distInput');
+  if(distInput) distInput.addEventListener('input', e=>draftDistance=e.target.value);
+  const noteInput = container.querySelector('#noteInput');
+  if(noteInput) noteInput.addEventListener('input', e=>draftNote=e.target.value);
+  wireCounters(container);
+}
+
+function renderDogs(container){
+  let html = `<div class="card dark">
+    <h3 style="margin-bottom:12px;">Add a dog</h3>
+    <div class="field"><label>Name</label><input type="text" id="newDogName" placeholder="e.g. Biscuit"></div>
+    <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--line);margin-bottom:5px;">Collar color</label>
+    <div class="swatch-row" id="swatchRow">`;
+  COLORS.forEach((c,i)=>{
+    html += `<div class="swatch ${i===0?'selected':''}" style="background:${c}" data-color="${c}"></div>`;
+  });
+  html += `</div>
+    <div style="height:12px;"></div>
+    <button class="btn-primary" id="addDogBtn">Add dog</button>
+  </div>`;
+
+  html += `<div class="card">`;
+  if(state.dogs.length===0){
+    html += `<div class="empty" style="color:var(--ink-dim);">No dogs in the pack yet.</div>`;
+  } else {
+    state.dogs.forEach(d=>{
+      const walkCount = state.walks.filter(w=>w.dogIds.includes(d.id)).length;
+      html += `<div class="dog-row">
+        <div class="dot" style="background:${d.color}"></div>
+        <div class="dog-name">${d.name}<div class="dog-meta">${walkCount} walk${walkCount!==1?'s':''} logged</div></div>
+        <div class="remove-x" data-id="${d.id}">✕</div>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+
+  let chosenColor = COLORS[0];
+  container.querySelectorAll('.swatch').forEach(s=>s.addEventListener('click', ()=>{
+    container.querySelectorAll('.swatch').forEach(x=>x.classList.remove('selected'));
+    s.classList.add('selected');
+    chosenColor = s.dataset.color;
+  }));
+  container.querySelector('#addDogBtn').addEventListener('click', ()=>{
+    const name = container.querySelector('#newDogName').value;
+    addDog(name, chosenColor);
+  });
+  container.querySelectorAll('.remove-x').forEach(x=>x.addEventListener('click', ()=>removeDog(x.dataset.id)));
+}
+
+function renderHistory(container){
+  let html = `<div class="filter-row">`;
+  html += `<div class="chip ${historyFilter==='all'?'selected':''}" style="background:${historyFilter==='all'?'var(--blaze-yellow)':'var(--panel-2)'};color:${historyFilter==='all'?'#fff':'var(--parchment)'}" data-filter="all">All dogs</div>`;
+  state.dogs.forEach(d=>{
+    const sel = historyFilter===d.id;
+    html += `<div class="chip" style="background:${sel?d.color:'var(--panel-2)'};color:${sel?'#fff':'var(--parchment)'}" data-filter="${d.id}">${d.name}</div>`;
+  });
+  html += `</div>`;
+
+  const walks = state.walks.filter(w => historyFilter==='all' || w.dogIds.includes(historyFilter));
+
+  if(walks.length===0){
+    html += `<div class="empty"><div class="empty-title">No walks yet</div>Log a walk from the Track tab and it'll show up here.</div>`;
+    container.innerHTML = html;
+    container.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click', ()=>{ historyFilter=c.dataset.filter; render(); }));
+    return;
+  }
+
+  html += `<div class="card"><div class="trail-wrap"><div class="trail-line"></div>`;
+  walks.forEach(w=>{
+    const d = new Date(w.date);
+    const dateStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+    html += `<div class="walk-entry">
+      <div class="walk-top"><div class="walk-date">${dateStr}</div></div>
+      <div class="walk-tags">`;
+    w.dogIds.forEach(id=>{
+      const dog = dogById(id);
+      if(dog) html += `<span class="tag" style="background:${dog.color}">${dog.name}</span>`;
+      else html += `<span class="tag" style="background:var(--ink-dim)">(removed dog)</span>`;
+    });
+    html += `</div>
+      <div class="walk-stats">
+        <div>${fmtTime(w.durationMs)}<span>Duration</span></div>
+        ${w.distance ? `<div>${w.distance} mi<span>Distance</span></div>` : ''}
+      </div>
+      ${(w.pee || w.poop) ? `<div class="potty-badges">${w.pee ? `<span>💧 ${w.pee}</span>`:''}${w.poop ? `<span>💩 ${w.poop}</span>`:''}</div>` : ''}
+      ${w.note ? `<div class="note">"${escapeHtml(w.note)}"</div>` : ''}
+      ${w.route ? renderRoutePreview(w.route) : ''}
+    </div>`;
+  });
+  html += `</div></div>`;
+  container.innerHTML = html;
+  container.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click', ()=>{ historyFilter=c.dataset.filter; render(); }));
+}
+
+function escapeHtml(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function renderStats(container){
+  const totalWalks = state.walks.length;
+  const totalMs = state.walks.reduce((a,w)=>a+w.durationMs,0);
+  const totalDist = state.walks.reduce((a,w)=>a+(w.distance||0),0);
+  const totalPee = state.walks.reduce((a,w)=>a+(w.pee||0),0);
+  const totalPoop = state.walks.reduce((a,w)=>a+(w.poop||0),0);
+
+  let html = `<div class="card dark pack-total">
+    <div><div class="n">${totalWalks}</div><div class="l">Walks</div></div>
+    <div><div class="n">${fmtTime(totalMs)}</div><div class="l">Time out</div></div>
+    <div><div class="n">${totalDist.toFixed(1)}</div><div class="l">Miles</div></div>
+  </div>
+  <div class="card dark pack-total">
+    <div><div class="n">💧 ${totalPee}</div><div class="l">Pees</div></div>
+    <div><div class="n">💩 ${totalPoop}</div><div class="l">Poops</div></div>
+  </div>`;
+
+  if(state.dogs.length===0){
+    html += `<div class="card"><div class="empty" style="color:var(--ink-dim);">Add dogs to see individual stats.</div></div>`;
+  } else {
+    state.dogs.forEach(d=>{
+      const dw = state.walks.filter(w=>w.dogIds.includes(d.id));
+      const ms = dw.reduce((a,w)=>a+w.durationMs,0);
+      const dist = dw.reduce((a,w)=>a+(w.distance||0),0);
+      const pee = dw.reduce((a,w)=>a+(w.pee||0),0);
+      const poop = dw.reduce((a,w)=>a+(w.poop||0),0);
+      const last = dw[0] ? new Date(dw[0].date).toLocaleDateString(undefined,{month:'short',day:'numeric'}) : '—';
+      html += `<div class="card stat-card">
+        <div class="dot" style="background:${d.color};width:18px;height:18px;"></div>
+        <div>
+          <div class="dog-name">${d.name}</div>
+          <div class="dog-meta">Last walk: ${last} · 💧${pee} 💩${poop}</div>
+        </div>
+        <div class="stat-nums">
+          <div><div class="stat-num">${dw.length}</div><div class="stat-label">Walks</div></div>
+          <div><div class="stat-num">${fmtTime(ms)}</div><div class="stat-label">Time</div></div>
+          <div><div class="stat-num">${dist.toFixed(1)}</div><div class="stat-label">Miles</div></div>
+        </div>
+      </div>`;
+    });
+  }
+  container.innerHTML = html;
+}
+
+function render(){
+  const container = document.getElementById('content');
+  if(activeTab==='track') renderTrack(container);
+  else if(activeTab==='dogs') renderDogs(container);
+  else if(activeTab==='history') renderHistory(container);
+  else if(activeTab==='stats') renderStats(container);
+}
+
+loadState();
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>console.log('SW registration failed', err));
+  });
+}
+</script>
+</body>
+</html>
