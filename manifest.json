@@ -1,6 +1,6 @@
 {
-  "name": "Pack Trail",
-  "short_name": "Pack Trail",
+  "name": "PogoLulu",
+  "short_name": "PogoLulu",
   "description": "Dog walk tracker for the whole pack",
   "start_url": "./index.html",
   "scope": "./",

@@ -98,20 +98,34 @@
   .dog-meta{font-size:12px;color:var(--ink-dim);}
   .remove-x{cursor:pointer;color:var(--ink-dim);font-size:16px;padding:2px 6px;}
 
-  /* History */
-  .trail-wrap{position:relative;padding-left:26px;}
-  .trail-line{position:absolute;left:9px;top:6px;bottom:6px;width:2px;
-    background-image:linear-gradient(var(--line) 60%, transparent 0%);
-    background-size:2px 10px;background-repeat:repeat-y;}
-  .walk-entry{position:relative;margin-bottom:14px;}
-  .walk-entry::before{
-    content:"🐾";font-size:12px;position:absolute;left:-26px;top:14px;
-  }
-  .walk-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
-  .walk-date{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:0.05em;}
-  .walk-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  /* History — expandable walk cards */
+  .walk-card{background:var(--parchment);border-radius:6px;margin-bottom:10px;overflow:hidden;}
+  .walk-card-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;}
+  .walk-card-header .paw-icon{font-size:15px;flex-shrink:0;}
+  .walk-summary{flex:1;min-width:0;}
+  .walk-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px;}
+  .walk-date{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;}
+  .walk-tags{display:flex;gap:6px;flex-wrap:wrap;}
   .tag{font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;color:#fff;}
-  .walk-stats{display:flex;gap:18px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;}
+  .walk-quick-stats{display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;}
+  .chevron{font-size:11px;color:var(--ink-dim);transition:transform .18s ease;flex-shrink:0;}
+  .chevron.open{transform:rotate(180deg);}
+  .walk-card-body{padding:0 16px 16px;border-top:1px solid var(--parchment-dim);}
+  .card-actions{display:flex;gap:4px;flex-shrink:0;}
+  .icon-btn{
+    width:30px;height:30px;border-radius:50%;border:none;padding:0;
+    background:transparent;color:var(--ink-dim);font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .icon-btn:hover{background:var(--parchment-dim);color:var(--ink);}
+  .icon-btn.danger:hover{background:#e8c8bc;color:var(--rust);}
+  .edit-link{
+    width:auto;display:inline-flex;align-items:center;gap:5px;padding:6px 14px;
+    font-size:11px;margin-top:10px;
+  }
+  .edit-actions{display:flex;gap:10px;margin-top:12px;}
+  .edit-actions button{width:auto;padding:9px 18px;font-size:12px;}
+  .walk-stats{display:flex;gap:18px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;margin-top:14px;}
   .walk-stats span{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:10px;color:var(--ink-dim);text-transform:uppercase;}
   .note{font-size:13px;color:var(--ink-dim);margin-top:6px;font-style:italic;}
   .filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
@@ -188,6 +202,9 @@ let elapsedMs = 0;
 let walkStopped = false;
 let selectedDogIds = [];
 let historyFilter = 'all';
+let expandedWalks = new Set();
+let editingWalkId = null;
+let editDraft = { pee:0, poop:0, note:'' };
 let peeCount = 0;
 let poopCount = 0;
 let draftDistance = '';
@@ -605,6 +622,230 @@ function renderDogs(container){
   container.querySelectorAll('.remove-x').forEach(x=>x.addEventListener('click', ()=>removeDog(x.dataset.id)));
 }
 
+async function deleteWalk(id){
+  if(!confirm("Delete this walk? This can't be undone.")) return;
+  state.walks = state.walks.filter(w=>w.id!==id);
+  expandedWalks.delete(id);
+  if(editingWalkId===id) editingWalkId = null;
+  await saveWalks();
+  render();
+}
+
+function startEditWalk(w){
+  editingWalkId = w.id;
+  editDraft = { pee: w.pee||0, poop: w.poop||0, note: w.note||'' };
+  render();
+}
+function cancelEditWalk(){
+  editingWalkId = null;
+  render();
+}
+async function saveEditWalk(id){
+  const w = state.walks.find(w=>w.id===id);
+  if(w){
+    w.pee = editDraft.pee;
+    w.poop = editDraft.poop;
+    w.note = editDraft.note;
+    await saveWalks();
+  }
+  editingWalkId = null;
+  render();
+}
+function adjustEditCount(which, delta){
+  if(which==='pee') editDraft.pee = Math.max(0, editDraft.pee+delta);
+  else editDraft.poop = Math.max(0, editDraft.poop+delta);
+  render();
+}
+function renderEditCounters(){
+  return `<div class="counter-row">
+    <div class="counter-box">
+      <span class="counter-label">💧 Pee</span>
+      <div class="counter-controls">
+        <button class="counter-btn" id="editPeeMinus" ${editDraft.pee===0?'disabled':''}>−</button>
+        <span class="counter-val">${editDraft.pee}</span>
+        <button class="counter-btn" id="editPeePlus">+</button>
+      </div>
+    </div>
+    <div class="counter-box">
+      <span class="counter-label">💩 Poop</span>
+      <div class="counter-controls">
+        <button class="counter-btn" id="editPoopMinus" ${editDraft.poop===0?'disabled':''}>−</button>
+        <span class="counter-val">${editDraft.poop}</span>
+        <button class="counter-btn" id="editPoopPlus">+</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- Snapshot + share ----
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function wrapCanvasText(ctx, text, maxWidth){
+  const words = text.split(' ');
+  let lines = [], line = '';
+  words.forEach(word=>{
+    const test = line ? line+' '+word : word;
+    if(ctx.measureText(test).width > maxWidth && line){ lines.push(line); line = word; }
+    else line = test;
+  });
+  if(line) lines.push(line);
+  return lines;
+}
+function drawRouteSketch(ctx, route, x, y, w, h){
+  ctx.fillStyle = '#d9cfb0';
+  roundRectPath(ctx, x, y, w, h, 8); ctx.fill();
+  const lats = route.map(p=>p.lat), lngs = route.map(p=>p.lng);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const pad = 16;
+  const spanLat=(maxLat-minLat)||0.0001, spanLng=(maxLng-minLng)||0.0001;
+  const proj = p => [
+    x+pad + ((p.lng-minLng)/spanLng)*(w-pad*2),
+    y+h-pad - ((p.lat-minLat)/spanLat)*(h-pad*2)
+  ];
+  ctx.beginPath();
+  route.forEach((p,i)=>{ const [px,py]=proj(p); if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+  ctx.strokeStyle = '#c1502e'; ctx.lineWidth = 3; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.stroke();
+  const [fx,fy] = proj(route[0]);
+  const [lx,ly] = proj(route[route.length-1]);
+  ctx.fillStyle = '#3e7ca6'; ctx.beginPath(); ctx.arc(fx,fy,6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#e8b23e'; ctx.beginPath(); ctx.arc(lx,ly,6,0,Math.PI*2); ctx.fill();
+}
+
+async function buildWalkSnapshot(w){
+  try{ await document.fonts.ready; }catch(e){}
+  const W = 640, padding = 32, contentW = W - padding*2;
+  const measure = document.createElement('canvas').getContext('2d');
+
+  const d = new Date(w.date);
+  const dateStr = d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+
+  let noteLines = [];
+  if(w.note){
+    measure.font = 'italic 400 16px Inter, sans-serif';
+    noteLines = wrapCanvasText(measure, '"'+w.note+'"', contentW);
+  }
+  const hasRoute = w.route && w.route.length>1;
+
+  let H = padding + 34 + 40 + 44 + 60;
+  if(w.pee || w.poop) H += 34;
+  if(noteLines.length) H += 6 + noteLines.length*22;
+  if(hasRoute) H += 200;
+  H += padding;
+
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W*scale; canvas.height = H*scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.textBaseline = 'top';
+
+  ctx.fillStyle = '#ece4cc';
+  roundRectPath(ctx,0,0,W,H,0); ctx.fill();
+
+  let y = padding;
+  ctx.fillStyle = '#6a634c';
+  ctx.font = '600 13px Inter, sans-serif';
+  ctx.fillText('🐾 POGOLULU', padding, y);
+  y += 34;
+
+  ctx.fillStyle = '#211f14';
+  ctx.font = '600 22px Oswald, sans-serif';
+  ctx.fillText(dateStr, padding, y);
+  y += 40;
+
+  let tx = padding;
+  ctx.font = '700 14px Inter, sans-serif';
+  w.dogIds.forEach(id=>{
+    const dog = dogById(id);
+    const name = dog ? dog.name : '(removed dog)';
+    const color = dog ? dog.color : '#6a634c';
+    const tw = ctx.measureText(name).width + 24;
+    ctx.fillStyle = color;
+    roundRectPath(ctx, tx, y, tw, 28, 14); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(name, tx+12, y+7);
+    tx += tw + 8;
+  });
+  y += 44;
+
+  ctx.font = '700 22px "JetBrains Mono", monospace';
+  ctx.fillStyle = '#211f14';
+  ctx.fillText(fmtTime(w.durationMs), padding, y);
+  ctx.font = '400 11px Inter, sans-serif';
+  ctx.fillStyle = '#6a634c';
+  ctx.fillText('DURATION', padding, y+30);
+  if(w.distance){
+    ctx.font = '700 22px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#211f14';
+    ctx.fillText(w.distance+' mi', padding+180, y);
+    ctx.font = '400 11px Inter, sans-serif';
+    ctx.fillStyle = '#6a634c';
+    ctx.fillText('DISTANCE', padding+180, y+30);
+  }
+  y += 60;
+
+  if(w.pee || w.poop){
+    ctx.font = '600 15px Inter, sans-serif';
+    ctx.fillStyle = '#6a634c';
+    let t = '';
+    if(w.pee) t += `💧 ${w.pee}   `;
+    if(w.poop) t += `💩 ${w.poop}`;
+    ctx.fillText(t, padding, y);
+    y += 34;
+  }
+
+  if(noteLines.length){
+    ctx.font = 'italic 400 16px Inter, sans-serif';
+    ctx.fillStyle = '#6a634c';
+    noteLines.forEach(line=>{ ctx.fillText(line, padding, y); y += 22; });
+    y += 6;
+  }
+
+  if(hasRoute){
+    drawRouteSketch(ctx, w.route, padding, y, contentW, 180);
+    y += 200;
+  }
+
+  return new Promise(resolve => canvas.toBlob(blob=>resolve(blob), 'image/png'));
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+async function shareWalk(w){
+  try{
+    const blob = await buildWalkSnapshot(w);
+    if(!blob) return;
+    const dogNames = w.dogIds.map(id=>{ const dog=dogById(id); return dog?dog.name:'a dog'; }).join(' & ');
+    const file = new File([blob], 'walk.png', {type:'image/png'});
+    const text = `Walk with ${dogNames} — ${fmtTime(w.durationMs)}${w.distance? ', '+w.distance+' mi':''}`;
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({ files:[file], title:'PogoLulu walk', text });
+    } else if(navigator.share){
+      try{ await navigator.share({ title:'PogoLulu walk', text }); }
+      catch(e){ downloadBlob(blob, 'walk.png'); }
+    } else {
+      downloadBlob(blob, 'walk.png');
+    }
+  }catch(e){
+    if(e.name !== 'AbortError') console.error('share failed', e);
+  }
+}
+
 function renderHistory(container){
   let html = `<div class="filter-row">`;
   html += `<div class="chip ${historyFilter==='all'?'selected':''}" style="background:${historyFilter==='all'?'var(--blaze-yellow)':'var(--panel-2)'};color:${historyFilter==='all'?'#fff':'var(--parchment)'}" data-filter="all">All dogs</div>`;
@@ -623,36 +864,107 @@ function renderHistory(container){
     return;
   }
 
-  html += `<div class="card"><div class="trail-wrap"><div class="trail-line"></div>`;
   walks.forEach(w=>{
     const d = new Date(w.date);
     const dateStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
-    html += `<div class="walk-entry">
-      <div class="walk-top"><div class="walk-date">${dateStr}</div></div>
-      <div class="walk-tags">`;
+    const isOpen = expandedWalks.has(w.id);
+    const isEditing = editingWalkId === w.id;
+    html += `<div class="walk-card">
+      <div class="walk-card-header" data-toggle="${w.id}">
+        <span class="paw-icon">🐾</span>
+        <div class="walk-summary">
+          <div class="walk-top">
+            <div class="walk-date">${dateStr}</div>
+            <div class="walk-quick-stats">
+              <span>${fmtTime(w.durationMs)}</span>
+              ${w.distance ? `<span>${w.distance} mi</span>` : ''}
+            </div>
+          </div>
+          <div class="walk-tags">`;
     w.dogIds.forEach(id=>{
       const dog = dogById(id);
       if(dog) html += `<span class="tag" style="background:${dog.color}">${dog.name}</span>`;
       else html += `<span class="tag" style="background:var(--ink-dim)">(removed dog)</span>`;
     });
     html += `</div>
-      <div class="walk-stats">
-        <div>${fmtTime(w.durationMs)}<span>Duration</span></div>
-        ${w.distance ? `<div>${w.distance} mi<span>Distance</span></div>` : ''}
-      </div>
-      ${(w.pee || w.poop) ? `<div class="potty-badges">${w.pee ? `<span>💧 ${w.pee}</span>`:''}${w.poop ? `<span>💩 ${w.poop}</span>`:''}</div>` : ''}
-      ${w.note ? `<div class="note">"${escapeHtml(w.note)}"</div>` : ''}
-      ${w.route ? `<div class="map-box thumb" id="routeMap_${w.id}"></div>` : ''}
-    </div>`;
+        </div>
+        <div class="card-actions">
+          <button class="icon-btn" data-share="${w.id}" title="Share">📤</button>
+          <button class="icon-btn danger" data-delete="${w.id}" title="Delete">🗑️</button>
+        </div>
+        <span class="chevron ${isOpen?'open':''}">▼</span>
+      </div>`;
+    if(isOpen){
+      html += `<div class="walk-card-body">
+        <div class="walk-stats">
+          <div>${fmtTime(w.durationMs)}<span>Duration</span></div>
+          ${w.distance ? `<div>${w.distance} mi<span>Distance</span></div>` : ''}
+        </div>`;
+      if(isEditing){
+        html += `${renderEditCounters()}
+        <div class="field">
+          <label>Note</label>
+          <textarea id="editNoteInput_${w.id}" placeholder="Sniffed every tree on Maple St.">${escapeHtml(editDraft.note)}</textarea>
+        </div>
+        <div class="edit-actions">
+          <button class="btn-ghost" data-cancel-edit="${w.id}">Cancel</button>
+          <button class="btn-primary" data-save-edit="${w.id}">Save changes</button>
+        </div>`;
+      } else {
+        html += `${(w.pee || w.poop) ? `<div class="potty-badges">${w.pee ? `<span>💧 ${w.pee}</span>`:''}${w.poop ? `<span>💩 ${w.poop}</span>`:''}</div>` : ''}
+        ${w.note ? `<div class="note">"${escapeHtml(w.note)}"</div>` : ''}
+        <button class="btn-ghost edit-link" data-edit="${w.id}">✎ Edit details</button>`;
+      }
+      html += `${w.route ? `<div class="map-box thumb" id="routeMap_${w.id}"></div>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
   });
-  html += `</div></div>`;
   container.innerHTML = html;
   container.querySelectorAll('[data-filter]').forEach(c=>c.addEventListener('click', ()=>{ historyFilter=c.dataset.filter; render(); }));
+  container.querySelectorAll('[data-toggle]').forEach(h=>h.addEventListener('click', ()=>{
+    const id = h.dataset.toggle;
+    if(expandedWalks.has(id)) expandedWalks.delete(id);
+    else expandedWalks.add(id);
+    render();
+  }));
+  container.querySelectorAll('[data-share]').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const w = state.walks.find(w=>w.id===b.dataset.share);
+    if(w) shareWalk(w);
+  }));
+  container.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    deleteWalk(b.dataset.delete);
+  }));
+  container.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const w = state.walks.find(w=>w.id===b.dataset.edit);
+    if(w) startEditWalk(w);
+  }));
+  container.querySelectorAll('[data-cancel-edit]').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    cancelEditWalk();
+  }));
+  container.querySelectorAll('[data-save-edit]').forEach(b=>b.addEventListener('click', e=>{
+    e.stopPropagation();
+    saveEditWalk(b.dataset.saveEdit);
+  }));
+  if(editingWalkId){
+    const noteEl = container.querySelector(`#editNoteInput_${editingWalkId}`);
+    if(noteEl) noteEl.addEventListener('input', e=>editDraft.note=e.target.value);
+    const pm = container.querySelector('#editPeeMinus'), pp = container.querySelector('#editPeePlus');
+    const om = container.querySelector('#editPoopMinus'), op = container.querySelector('#editPoopPlus');
+    if(pm) pm.addEventListener('click', e=>{ e.stopPropagation(); adjustEditCount('pee',-1); });
+    if(pp) pp.addEventListener('click', e=>{ e.stopPropagation(); adjustEditCount('pee',1); });
+    if(om) om.addEventListener('click', e=>{ e.stopPropagation(); adjustEditCount('poop',-1); });
+    if(op) op.addEventListener('click', e=>{ e.stopPropagation(); adjustEditCount('poop',1); });
+  }
 
   historyMaps.forEach(m=>m.remove());
   historyMaps = [];
   walks.forEach(w=>{
-    if(w.route){
+    if(w.route && expandedWalks.has(w.id)){
       const m = initRouteMap('routeMap_'+w.id, w.route, {interactive:false});
       if(m) historyMaps.push(m);
     }
